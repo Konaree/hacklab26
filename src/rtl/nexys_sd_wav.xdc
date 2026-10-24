@@ -1,13 +1,20 @@
-set_property -dict {PACKAGE_PIN E3 IOSTANDARD LVCMOS33} [get_ports CLK100MHZ]
-create_clock -add -name sys_clk -period 10.000 [get_ports CLK100MHZ]
+# Nexys A7-100T: 100 MHz system clock and reset.
+set_property -dict {PACKAGE_PIN E3  IOSTANDARD LVCMOS33} [get_ports CLK100MHZ]
+create_clock -name sys_clk -period 10.000 [get_ports CLK100MHZ]
 set_property -dict {PACKAGE_PIN C12 IOSTANDARD LVCMOS33} [get_ports CPU_RESETN]
+
+# On-board microSD slot J1, SPI mode.
 set_property -dict {PACKAGE_PIN E2 IOSTANDARD LVCMOS33} [get_ports SD_RESET]
 set_property -dict {PACKAGE_PIN B1 IOSTANDARD LVCMOS33} [get_ports SD_SCK]
 set_property -dict {PACKAGE_PIN C1 IOSTANDARD LVCMOS33} [get_ports SD_CMD]
 set_property -dict {PACKAGE_PIN C2 IOSTANDARD LVCMOS33} [get_ports SD_DAT0]
 set_property -dict {PACKAGE_PIN D2 IOSTANDARD LVCMOS33} [get_ports SD_DAT3]
+
+# Mono audio output (AUD_PWM is open-drain in top module).
 set_property -dict {PACKAGE_PIN A11 IOSTANDARD LVCMOS33} [get_ports AUD_PWM]
 set_property -dict {PACKAGE_PIN D12 IOSTANDARD LVCMOS33} [get_ports AUD_SD]
+
+# Diagnostic LEDs.
 set_property -dict {PACKAGE_PIN H17 IOSTANDARD LVCMOS33} [get_ports {LED[0]}]
 set_property -dict {PACKAGE_PIN K15 IOSTANDARD LVCMOS33} [get_ports {LED[1]}]
 set_property -dict {PACKAGE_PIN J13 IOSTANDARD LVCMOS33} [get_ports {LED[2]}]
