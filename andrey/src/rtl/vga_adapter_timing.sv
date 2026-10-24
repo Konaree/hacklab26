@@ -1,11 +1,11 @@
 `timescale 1ns/1ps
 // VESA 800x600 at 60 Hz: 40 MHz, 1056 pixels/line, 628 lines/frame.
 module vga_adapter_timing (
-    input wire clk, input wire rst,
-    output reg [10:0] x, output reg [9:0] y,
-    output wire visible, output wire hsync, output wire vsync
+    input logic clk, input logic rst,
+    output logic [10:0] x, output logic [9:0] y,
+    output logic visible, output logic hsync, output logic vsync
 );
-    always @(posedge clk or posedge rst) begin
+    always_ff @(posedge clk or posedge rst) begin
         if (rst) begin x <= 0; y <= 0; end
         else if (x == 11'd1055) begin
             x <= 0;

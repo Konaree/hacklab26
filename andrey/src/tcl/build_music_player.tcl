@@ -3,19 +3,37 @@
 set src_dir [file normalize [file join [file dirname [file normalize [info script]] ] ..]]
 set repo_root [file dirname $src_dir]
 set project_dir [file join $repo_root vivado_music_player]
+set asset_dir [file join $src_dir rtl assets]
 
 create_project -force player_music $project_dir -part xc7a100tcsg324-1
+# Vivado's target_language property accepts Verilog/VHDL; .sv files are
+# automatically parsed as SystemVerilog based on their file extension.
 set_property target_language Verilog [current_project]
 
 add_files -norecurse [list \
     [file join $src_dir rtl ps2_receiver.sv] \
     [file join $src_dir rtl player_controller.sv] \
     [file join $src_dir rtl player_top.sv] \
-    [file join $src_dir rtl music_timer.v] \
-    [file join $src_dir rtl music_renderer.v] \
-    [file join $src_dir rtl music_sevenseg.v] \
-    [file join $src_dir rtl vga_adapter_timing.v] \
-    [file join $src_dir ipcores vga_clk40.xci]]
+    [file join $src_dir rtl music_renderer.sv] \
+    [file join $src_dir rtl music_sevenseg.sv] \
+    [file join $src_dir rtl vga_adapter_timing.sv] \
+    [file join $src_dir rtl music_timer.sv] \
+    [file join $src_dir rtl fat32_wav_player.sv] \
+    [file join $src_dir rtl sd_spi_sector.sv] \
+    [file join $src_dir rtl spi_byte_master.sv] \
+    [file join $src_dir rtl audio_level_meter.sv] \
+    [file join $src_dir rtl music_rgb.sv] \
+    [file join $src_dir rtl audio_spectrum_meter.sv] \
+    [file join $src_dir rtl nexys_auto_sleep.sv] \
+    [file join $src_dir rtl adxl362_reader.sv] \
+    [file join $src_dir rtl motion_detector.sv] \
+    [file join $src_dir rtl auto_sleep_timer.sv] \
+    [file join $src_dir rtl spi_mode0_master.sv] \
+    [file join $src_dir ipcores vga_clk40.xci] \
+    [file join $asset_dir music_covers_rgb444.mem]]
+set_property include_dirs [list $asset_dir] [get_filesets sources_1]
+set_property file_type {Memory Initialization Files} \
+    [get_files [file join $asset_dir music_covers_rgb444.mem]]
 add_files -fileset constrs_1 -norecurse [file join $src_dir xdc nexys_a7_player.xdc]
 set_property top player_top [get_filesets sources_1]
 generate_target all [get_ips vga_clk40]
