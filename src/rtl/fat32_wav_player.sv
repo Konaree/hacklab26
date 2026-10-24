@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Read-only MVP: MBR, FAT32, first root-directory sector, TRACK001.WAV.
+// Read-only playlist: MBR, FAT32, up to 16 WAV files in the first root cluster.
 // WAV: canonical 44-byte header, unsigned PCM, mono, 8-bit, 48000 Hz.
 // IMPORTANT: file clusters MUST be physically contiguous. FAT chain traversal
 // is deliberately not implemented in this revision.
@@ -16,16 +16,22 @@ module fat32_wav_player (
     input  logic        data_valid,
     input  logic [8:0]  data_index,
     input  logic        sample_tick,
+    input  logic        next_track,
+    input  logic        prev_track,
     output logic [7:0]  sample,
     output logic        playing,
-    output logic [7:0]  status
+    output logic [7:0]  status,
+    output logic [3:0]  track_index,
+    output logic [4:0]  track_count
 );
     localparam int FIFO_ADDR_BITS = 12;
     localparam int FIFO_DEPTH     = 1 << FIFO_ADDR_BITS;
     localparam int FIFO_WATERMARK = FIFO_DEPTH - 512;
-    localparam logic [87:0] TARGET_FILE = "TRACK001WAV";
+    localparam logic [4:0] MAX_TRACKS = 5'd16;
+    localparam logic [FIFO_ADDR_BITS:0] FIFO_CAPACITY = (FIFO_ADDR_BITS+1)'(FIFO_DEPTH);
+    localparam logic [FIFO_ADDR_BITS:0] FETCH_LIMIT = (FIFO_ADDR_BITS+1)'(FIFO_WATERMARK);
 
-    typedef enum logic [3:0] {
+    typedef enum logic [4:0] {
         ST_WAIT_SD,
         ST_REQ_MBR,
         ST_WAIT_MBR,
@@ -37,6 +43,10 @@ module fat32_wav_player (
         ST_REQ_WAV,
         ST_WAIT_WAV,
         ST_DRAIN,
+        ST_SWITCH_WAIT,
+        ST_TRACK_LOAD,
+        ST_TRACK_START,
+        ST_FINISHED,
         ST_FAIL
     } state_t;
 
@@ -55,12 +65,20 @@ module fat32_wav_player (
     logic        cluster_size_valid;
     logic        bytes_per_sector_valid;
 
-    logic [87:0] dir_name;
+    logic [7:0]  dir_first_char;
+    logic [23:0] dir_extension;
     logic [7:0]  dir_attributes;
     logic [15:0] dir_cluster_hi;
     logic [15:0] dir_cluster_lo;
-    logic [31:0] dir_file_size;
-    logic        file_found;
+    logic [23:0] dir_file_size;
+    logic [6:0]  directory_sector;
+    logic        directory_end;
+    logic        playlist_ready;
+    logic [31:0] playlist_cluster [0:15];
+    logic [31:0] playlist_size [0:15];
+    logic        playlist_write;
+    wire [31:0] directory_entry_cluster = {dir_cluster_hi, dir_cluster_lo};
+    wire [31:0] directory_entry_size = {data, dir_file_size[23:0]};
     logic [31:0] file_start_cluster;
     logic [31:0] file_size;
     logic [31:0] first_sector_lba;
@@ -82,8 +100,8 @@ module fat32_wav_player (
     logic                     fifo_push;
     logic                     fifo_pop;
 
-    wire fifo_has_space = fifo_count < FIFO_DEPTH;
-    wire fifo_can_fetch = fifo_count <= FIFO_WATERMARK;
+    wire fifo_has_space = fifo_count < FIFO_CAPACITY;
+    wire fifo_can_fetch = fifo_count <= FETCH_LIMIT;
 
     // Check only the header fields required by the exact supported format.
     // No 44-byte register array or variable-index read mux is necessary.
@@ -134,15 +152,36 @@ module fat32_wav_player (
         fifo_push = 1'b0;
         fifo_pop  = 1'b0;
 
-        if (state == ST_WAIT_WAV && data_valid && fifo_has_space &&
+        if (!sd_error && !(next_track ^ prev_track) &&
+            state == ST_WAIT_WAV && data_valid && fifo_has_space &&
             !header_bad && file_byte_position >= 32'd44 &&
             file_byte_position < file_size &&
             payload_bytes_queued < payload_size) begin
             fifo_push = 1'b1;
         end
 
-        if (sample_tick && playing && fifo_count != 0) begin
+        if (!sd_error && !(next_track ^ prev_track) &&
+            sample_tick && playing && fifo_count != 0) begin
             fifo_pop = 1'b1;
+        end
+    end
+
+    // FAT short entries are in directory order. Deleted entries, subdirectories,
+    // volume labels and long-name records are never included in the playlist.
+    always_comb begin
+        playlist_write = state == ST_WAIT_DIR && data_valid &&
+            data_index[4:0] == 5'd31 && !directory_end &&
+            track_count < MAX_TRACKS && dir_first_char != 8'hE5 &&
+            dir_extension == "WAV" && !dir_attributes[3] &&
+            !dir_attributes[4] && directory_entry_cluster >= 32'd2 &&
+            directory_entry_size >= 32'd44 && !sd_error;
+    end
+
+    // No reset is applied to catalogue contents. track_count defines validity.
+    always_ff @(posedge clk) begin
+        if (playlist_write) begin
+            playlist_cluster[track_count[3:0]] <= directory_entry_cluster;
+            playlist_size[track_count[3:0]] <= directory_entry_size;
         end
     end
 
@@ -157,9 +196,9 @@ module fat32_wav_player (
         end
     end
 
-    // One-sample tick of latency is harmless: a read at tick N is used at N+1.
-    // This preserves continuous playback while enabling synchronous RAM reads.
-    always_ff @(posedge clk or negedge rst_n) begin
+    // A read at sample tick N is presented at sample tick N+1.
+    // Synchronous reset also keeps the RAM addresses/enables free of async resets.
+    always_ff @(posedge clk) begin
         if (!rst_n) begin
             state                  <= ST_WAIT_SD;
             read_req               <= 1'b0;
@@ -179,12 +218,17 @@ module fat32_wav_player (
             cluster_shift          <= 3'd0;
             cluster_size_valid     <= 1'b0;
             bytes_per_sector_valid <= 1'b0;
-            dir_name               <= 88'd0;
+            dir_first_char         <= 8'd0;
+            dir_extension          <= 24'd0;
             dir_attributes         <= 8'd0;
             dir_cluster_hi         <= 16'd0;
             dir_cluster_lo         <= 16'd0;
-            dir_file_size          <= 32'd0;
-            file_found             <= 1'b0;
+            dir_file_size          <= 24'd0;
+            directory_sector       <= 7'd0;
+            directory_end          <= 1'b0;
+            playlist_ready         <= 1'b0;
+            track_index            <= 4'd0;
+            track_count            <= 5'd0;
             file_start_cluster     <= 32'd0;
             file_size              <= 32'd0;
             first_sector_lba       <= 32'd0;
@@ -227,6 +271,21 @@ module fat32_wav_player (
                 state   <= ST_FAIL;
                 status  <= 8'hE0;
                 playing <= 1'b0;
+            end else if (playlist_ready && (next_track ^ prev_track)) begin
+                // Commands take precedence over automatic end-of-track changes.
+                // Do not abort the SD controller in the middle of a sector.
+                if (next_track)
+                    track_index <= ({1'b0, track_index} + 5'd1 < track_count) ?
+                                   track_index + 4'd1 : 4'd0;
+                else
+                    track_index <= (track_index != 0) ? track_index - 4'd1 :
+                                   4'(track_count - 5'd1);
+                read_req <= 1'b0;
+                playing <= 1'b0;
+                sample <= 8'h80;
+                fifo_read_valid <= 1'b0;
+                state <= ST_SWITCH_WAIT;
+                status <= 8'h04;
             end else begin
                 case (state)
                     ST_WAIT_SD: if (sd_ready) begin
@@ -315,7 +374,7 @@ module fat32_wav_player (
                                 state  <= ST_FAIL;
                             end else begin
                                 // FAT count is restricted to 1 or 2: no 32x8 multiplier.
-                                data_region_lba <= partition_lba + reserved_sectors +
+                                data_region_lba <= partition_lba + {16'd0, reserved_sectors} +
                                     ((number_of_fats == 2) ? (fat_size << 1) : fat_size);
                                 status <= 8'h03;
                                 state  <= ST_CALC_ROOT;
@@ -327,11 +386,12 @@ module fat32_wav_player (
                     ST_CALC_ROOT: begin
                         root_directory_lba <= data_region_lba +
                             ((root_cluster - 32'd2) << cluster_shift);
+                        directory_sector <= 7'd0;
                         state <= ST_REQ_DIR;
                     end
 
                     ST_REQ_DIR: if (!sd_busy) begin
-                        read_lba <= root_directory_lba;
+                        read_lba <= root_directory_lba + {25'd0, directory_sector};
                         read_req <= 1'b1;
                         state    <= ST_WAIT_DIR;
                     end
@@ -339,17 +399,14 @@ module fat32_wav_player (
                     ST_WAIT_DIR: begin
                         if (data_valid) begin
                             case (data_index[4:0])
-                                5'd0:  dir_name[87:80]      <= data;
-                                5'd1:  dir_name[79:72]      <= data;
-                                5'd2:  dir_name[71:64]      <= data;
-                                5'd3:  dir_name[63:56]      <= data;
-                                5'd4:  dir_name[55:48]      <= data;
-                                5'd5:  dir_name[47:40]      <= data;
-                                5'd6:  dir_name[39:32]      <= data;
-                                5'd7:  dir_name[31:24]      <= data;
-                                5'd8:  dir_name[23:16]      <= data;
-                                5'd9:  dir_name[15:8]       <= data;
-                                5'd10: dir_name[7:0]        <= data;
+                                5'd0: begin
+                                    dir_first_char <= data;
+                                    if (data == 8'h00)
+                                        directory_end <= 1'b1;
+                                end
+                                5'd8:  dir_extension[23:16]      <= data;
+                                5'd9:  dir_extension[15:8]       <= data;
+                                5'd10: dir_extension[7:0]        <= data;
                                 5'd11: dir_attributes       <= data;
                                 5'd20: dir_cluster_hi[7:0] <= data;
                                 5'd21: dir_cluster_hi[15:8]<= data;
@@ -358,35 +415,62 @@ module fat32_wav_player (
                                 5'd28: dir_file_size[7:0]   <= data;
                                 5'd29: dir_file_size[15:8]  <= data;
                                 5'd30: dir_file_size[23:16] <= data;
-                                5'd31: begin
-                                    dir_file_size[31:24] <= data;
-                                    if (!file_found && dir_name == TARGET_FILE &&
-                                        !dir_attributes[3] && !dir_attributes[4] &&
-                                        dir_attributes != 8'h0F) begin
-                                        file_found         <= 1'b1;
-                                        file_start_cluster <= {dir_cluster_hi, dir_cluster_lo};
-                                        file_size          <= {data, dir_file_size[23:0]};
-                                    end
-                                end
                                 default: ;
                             endcase
                         end
 
+                        if (playlist_write)
+                            track_count <= track_count + 5'd1;
+
                         if (sd_done) begin
-                            if (file_found && file_start_cluster >= 2 && file_size >= 44) begin
-                                first_sector_lba   <= data_region_lba +
-                                    ((file_start_cluster - 32'd2) << cluster_shift);
-                                sector_offset      <= 32'd0;
-                                file_byte_position <= 32'd0;
-                                payload_size       <= 32'd0;
-                                header_bad         <= 1'b0;
-                                status             <= 8'h04;
-                                state              <= ST_REQ_WAV;
+                            if (directory_end || track_count == MAX_TRACKS ||
+                                ({1'b0, directory_sector} + 8'd1 == (8'd1 << cluster_shift))) begin
+                                if (track_count != 0) begin
+                                    playlist_ready <= 1'b1;
+                                    track_index <= 4'd0;
+                                    state <= ST_SWITCH_WAIT;
+                                    status <= 8'h04;
+                                end else begin
+                                    status <= 8'hE4;
+                                    state <= ST_FAIL;
+                                end
                             end else begin
-                                status <= 8'hE4;
-                                state  <= ST_FAIL;
+                                directory_sector <= directory_sector + 7'd1;
+                                state <= ST_REQ_DIR;
                             end
                         end
+                    end
+
+                    // Old-sector data is ignored in these states. The card remains
+                    // initialized; only per-track parser and FIFO state is cleared.
+                    ST_SWITCH_WAIT: begin
+                        playing <= 1'b0;
+                        sample <= 8'h80;
+                        fifo_read_valid <= 1'b0;
+                        if (!sd_busy) begin
+                            fifo_wr_ptr <= '0;
+                            fifo_rd_ptr <= '0;
+                            fifo_count <= '0;
+                            sector_offset <= 32'd0;
+                            file_byte_position <= 32'd0;
+                            payload_size <= 32'd0;
+                            payload_bytes_queued <= 32'd0;
+                            header_bad <= 1'b0;
+                            state <= ST_TRACK_LOAD;
+                        end
+                    end
+
+                    // Registered catalogue reads do not need a wide async mux.
+                    ST_TRACK_LOAD: begin
+                        file_start_cluster <= playlist_cluster[track_index];
+                        file_size <= playlist_size[track_index];
+                        state <= ST_TRACK_START;
+                    end
+
+                    ST_TRACK_START: begin
+                        first_sector_lba <= data_region_lba +
+                            ((file_start_cluster - 32'd2) << cluster_shift);
+                        state <= ST_REQ_WAV;
                     end
 
                     ST_REQ_WAV: if (!sd_busy && fifo_can_fetch) begin
@@ -434,7 +518,19 @@ module fat32_wav_player (
                     ST_DRAIN: if (sample_tick && fifo_count == 0 && !fifo_read_valid) begin
                         playing <= 1'b0;
                         sample  <= 8'h80;
-                        status  <= 8'h06;
+                        if ({1'b0, track_index} + 5'd1 < track_count) begin
+                            track_index <= track_index + 4'd1;
+                            status <= 8'h04;
+                            state <= ST_SWITCH_WAIT;
+                        end else begin
+                            status <= 8'h06;
+                            state <= ST_FINISHED;
+                        end
+                    end
+
+                    ST_FINISHED: begin
+                        playing <= 1'b0;
+                        sample <= 8'h80;
                     end
 
                     ST_FAIL: begin
