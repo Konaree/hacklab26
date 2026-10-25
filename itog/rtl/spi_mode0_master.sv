@@ -1,6 +1,3 @@
-// SPI mode 0, MSB first. One whole transfer keeps CS low.
-// clk is Nexys A7 100 MHz. start is a 1-clock pulse when idle.
-// tx_word is LEFT aligned; e.g. 24 bits = {byte0,byte1,byte2,16'b0}.
 module spi_mode0_master #(
     parameter integer CLK_HZ = 100_000_000,
     parameter integer SPI_HZ = 2_000_000
@@ -92,4 +89,5 @@ module spi_mode0_master #(
             endcase
         end
     end
+
 endmodule

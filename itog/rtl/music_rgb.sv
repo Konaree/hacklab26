@@ -1,8 +1,3 @@
-// Two RGB LEDs on Nexys A7, synchronized to real PCM envelope level.
-// LED16: blue -> cyan/green -> yellow/orange -> red as volume rises,
-//        and PWM brightness tracks volume.
-// LED17: brief white flashes on sharp increases in the audio envelope.
-// LEDs are active high. No additional audio filtering/FFT is needed.
 module music_rgb (
     input  logic       clk,
     input  logic       rst,
@@ -36,7 +31,6 @@ module music_rgb (
             divider <= divider + 8'd1;
             if (divider == 8'hFF)
                 pwm_count <= pwm_count + 8'd1;
-
             if (!active) begin
                 last_level       <= '0;
                 flash_windows    <= '0;
@@ -47,7 +41,6 @@ module music_rgb (
                     flash_windows <= flash_windows - 4'd1;
                 if (cooldown_windows != 0)
                     cooldown_windows <= cooldown_windows - 4'd1;
-                // Beat-like transient, not a claim of true tempo detection.
                 if (level >= 8'd20 &&
                     {1'b0, level} > ({1'b0, last_level} + 9'd10) &&
                     cooldown_windows == 0) begin
@@ -59,7 +52,6 @@ module music_rgb (
     end
 
     always_comb begin
-        // Saturating level-to-brightness gain. Fully off at silence/pause.
         if (!active || level < 8'd2)
             brightness = 8'd0;
         else if (level >= 8'd64)
@@ -92,4 +84,5 @@ module music_rgb (
         LED17_G = active && (pwm_count < flash_duty);
         LED17_B = active && (pwm_count < flash_duty);
     end
+
 endmodule

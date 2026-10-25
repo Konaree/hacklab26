@@ -1,5 +1,3 @@
-// Audio envelope meter for unsigned 8-bit PCM samples (silence = 128).
-// 1024-sample windows at 48 kHz -> ~21.3 ms between level updates.
 module audio_level_meter (
     input  logic        clk,
     input  logic        rst,
@@ -16,7 +14,6 @@ module audio_level_meter (
 
     always_comb begin
         magnitude = (sample >= 8'd128) ? (sample - 8'd128) : (8'd128 - sample);
-        // 16 increasing thresholds: height of the volume bar is driven by PCM.
         led[0]  = active && level >= 8'd2;
         led[1]  = active && level >= 8'd4;
         led[2]  = active && level >= 8'd6;
@@ -60,4 +57,5 @@ module audio_level_meter (
             end
         end
     end
+
 endmodule

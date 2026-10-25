@@ -1,5 +1,3 @@
-// SW0 enables inactivity timeout. Counts seconds without overflowing 32 bits.
-// A keyboard event or a motion pulse resets the idle clock and wakes instantly.
 module auto_sleep_timer #(
     parameter integer CLK_HZ = 100_000_000,
     parameter integer INACTIVE_SEC = 60
@@ -18,13 +16,13 @@ module auto_sleep_timer #(
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
-            cycle_count <= '0;
+            cycle_count  <= '0;
             seconds_idle <= '0;
-            sleep_req <= 1'b0;
+            sleep_req    <= 1'b0;
         end else if (!enabled || motion_pulse || key_activity) begin
-            cycle_count <= '0;
+            cycle_count  <= '0;
             seconds_idle <= '0;
-            sleep_req <= 1'b0;
+            sleep_req    <= 1'b0;
         end else if (!sleep_req) begin
             if (cycle_count == CLK_HZ-1) begin
                 cycle_count <= '0;
@@ -35,4 +33,5 @@ module auto_sleep_timer #(
             end else cycle_count <= cycle_count + 1'b1;
         end
     end
+
 endmodule

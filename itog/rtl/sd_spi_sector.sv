@@ -1,7 +1,3 @@
-// SPDX-License-Identifier: MIT
-// Read-only SDHC SPI interface (block addresses, 512 bytes per sector).
-// Init: CMD0, CMD8, CMD55/ACMD41, CMD58. Read: CMD17.
-// Intended for a card preformatted as MBR + FAT32.
 module sd_spi_sector (
     input  logic        clk,
     input  logic        rst_n,
@@ -87,12 +83,11 @@ module sd_spi_sector (
         .rx_data   (spi_rx)
     );
 
-    // No asynchronous external SPI clocks; all state is clocked by clk.
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state           <= ST_POWER;
             cs_n            <= 1'b1;
-            sd_reset_n      <= 1'b0;  // Nexys A7: low enables SD socket power
+            sd_reset_n      <= 1'b0;
             initialized     <= 1'b0;
             busy            <= 1'b1;
             sector_done     <= 1'b0;
@@ -142,7 +137,6 @@ module sd_spi_sector (
                     end
                 end
 
-                // At least 80 dummy clocks with CS deasserted.
                 ST_DUMMY: if (spi_done) begin
                     if (dummy_remaining == 4'd9) begin
                         command     <= 6'd0;
@@ -297,7 +291,6 @@ module sd_spi_sector (
                 end
 
                 ST_READY: if (read_req) begin
-                    // SDHC uses sector numbers directly (not byte addresses).
                     command     <= 6'd17;
                     command_arg <= read_lba;
                     command_crc <= 8'h01;
@@ -355,4 +348,5 @@ module sd_spi_sector (
             endcase
         end
     end
+
 endmodule

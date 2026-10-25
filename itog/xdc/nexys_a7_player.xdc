@@ -1,4 +1,3 @@
-# Nexys A7-100T pins. Clocking Wizard supplies the 100 MHz clock constraint.
 set_property CFGBVS VCCO [current_design]
 set_property CONFIG_VOLTAGE 3.3 [current_design]
 set_property -dict { PACKAGE_PIN E3 IOSTANDARD LVCMOS33 } [get_ports CLK100MHZ]
@@ -22,8 +21,6 @@ set_property -dict { PACKAGE_PIN V14 IOSTANDARD LVCMOS33 } [get_ports {LED[13]}]
 set_property -dict { PACKAGE_PIN V12 IOSTANDARD LVCMOS33 } [get_ports {LED[14]}]
 set_property -dict { PACKAGE_PIN V11 IOSTANDARD LVCMOS33 } [get_ports {LED[15]}]
 
-# On-board RGB LEDs, active high. LED16 reflects audio level/color;
-# LED17 flashes on sharp increases in the averaged PCM envelope.
 set_property -dict { PACKAGE_PIN N15 IOSTANDARD LVCMOS33 } [get_ports LED16_R]
 set_property -dict { PACKAGE_PIN M16 IOSTANDARD LVCMOS33 } [get_ports LED16_G]
 set_property -dict { PACKAGE_PIN R12 IOSTANDARD LVCMOS33 } [get_ports LED16_B]
@@ -61,22 +58,18 @@ set_property -dict { PACKAGE_PIN D8 IOSTANDARD LVCMOS33 } [get_ports {VGA_B[3]}]
 set_property -dict { PACKAGE_PIN B11 IOSTANDARD LVCMOS33 } [get_ports VGA_HS]
 set_property -dict { PACKAGE_PIN B12 IOSTANDARD LVCMOS33 } [get_ports VGA_VS]
 
-# microSD slot, used in SPI mode.
 set_property -dict { PACKAGE_PIN E2 IOSTANDARD LVCMOS33 } [get_ports SD_RESET]
 set_property -dict { PACKAGE_PIN B1 IOSTANDARD LVCMOS33 } [get_ports SD_SCK]
 set_property -dict { PACKAGE_PIN C1 IOSTANDARD LVCMOS33 } [get_ports SD_CMD]
 set_property -dict { PACKAGE_PIN C2 IOSTANDARD LVCMOS33 } [get_ports SD_DAT0]
 set_property -dict { PACKAGE_PIN D2 IOSTANDARD LVCMOS33 } [get_ports SD_DAT3]
 
-# On-board audio amplifier.
 set_property -dict { PACKAGE_PIN A11 IOSTANDARD LVCMOS33 } [get_ports AUD_PWM]
 set_property -dict { PACKAGE_PIN D12 IOSTANDARD LVCMOS33 } [get_ports AUD_SD]
 
-# On-board ADXL362 accelerometer SPI interface.
 set_property -dict { PACKAGE_PIN E15 IOSTANDARD LVCMOS33 } [get_ports ACL_MISO]
 set_property -dict { PACKAGE_PIN F14 IOSTANDARD LVCMOS33 } [get_ports ACL_MOSI]
 set_property -dict { PACKAGE_PIN F15 IOSTANDARD LVCMOS33 } [get_ports ACL_SCLK]
 set_property -dict { PACKAGE_PIN D15 IOSTANDARD LVCMOS33 } [get_ports ACL_CSN]
 
-# SW0 enables the 60-second inactivity sleep feature.
 set_property -dict { PACKAGE_PIN J15 IOSTANDARD LVCMOS33 } [get_ports SW0]

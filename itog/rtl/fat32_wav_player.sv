@@ -1,8 +1,3 @@
-// SPDX-License-Identifier: MIT
-// Read-only MVP: MBR, FAT32, first root-directory sector, TRACK001/002/003.WAV.
-// WAV: canonical 44-byte header, unsigned PCM, mono, 8-bit, 48000 Hz.
-// IMPORTANT: file clusters MUST be physically contiguous. FAT chain traversal
-// is deliberately not implemented in this revision.
 module fat32_wav_player (
     input  logic        clk,
     input  logic        rst_n,
@@ -29,6 +24,7 @@ module fat32_wav_player (
     localparam int FIFO_ADDR_BITS = 12;
     localparam int FIFO_DEPTH     = 1 << FIFO_ADDR_BITS;
     localparam int FIFO_WATERMARK = FIFO_DEPTH - 512;
+
     logic [87:0] target_file;
     logic [31:0] progress_remainder;
     logic [15:0] samples_in_second;
@@ -86,26 +82,23 @@ module fat32_wav_player (
 
     logic [31:0] file_byte_position;
     logic [31:0] payload_size;
-    wire  [31:0] total_samples_for_progress = payload_size;
+    logic [31:0] total_samples_for_progress = payload_size;
     logic [31:0] payload_bytes_queued;
     logic        header_bad;
 
-    // This array has no reset and is read synchronously so that Vivado can
-    // infer a compact block RAM rather than a large LUT-based async-read mux.
     (* ram_style = "block" *) logic [7:0] audio_ram [0:FIFO_DEPTH-1];
+
     logic [FIFO_ADDR_BITS-1:0] fifo_wr_ptr;
     logic [FIFO_ADDR_BITS-1:0] fifo_rd_ptr;
     logic [FIFO_ADDR_BITS:0]   fifo_count;
-    logic [7:0]               fifo_read_data;
-    logic                     fifo_read_valid;
-    logic                     fifo_push;
-    logic                     fifo_pop;
+    logic [7:0]                fifo_read_data;
+    logic                      fifo_read_valid;
+    logic                      fifo_push;
+    logic                      fifo_pop;
 
-    wire fifo_has_space = fifo_count < FIFO_DEPTH;
-    wire fifo_can_fetch = fifo_count <= FIFO_WATERMARK;
+    logic fifo_has_space = fifo_count < FIFO_DEPTH;
+    logic fifo_can_fetch = fifo_count <= FIFO_WATERMARK;
 
-    // Check only the header fields required by the exact supported format.
-    // No 44-byte register array or variable-index read mux is necessary.
     function automatic logic header_byte_ok (
         input logic [5:0] position,
         input logic [7:0] value
@@ -136,15 +129,15 @@ module fat32_wav_player (
                 6'd28: header_byte_ok = (value == 8'h80); // byte rate = 48000
                 6'd29: header_byte_ok = (value == 8'hBB);
                 6'd30, 6'd31: header_byte_ok = (value == 8'h00);
-                6'd32: header_byte_ok = (value == 8'h01); // block align
+                6'd32: header_byte_ok = (value == 8'h01);
                 6'd33: header_byte_ok = (value == 8'h00);
-                6'd34: header_byte_ok = (value == 8'h08); // 8 bits
+                6'd34: header_byte_ok = (value == 8'h08);
                 6'd35: header_byte_ok = (value == 8'h00);
                 6'd36: header_byte_ok = (value == "d");
                 6'd37: header_byte_ok = (value == "a");
                 6'd38: header_byte_ok = (value == "t");
                 6'd39: header_byte_ok = (value == "a");
-                default: header_byte_ok = 1'b1; // RIFF size and data size
+                default: header_byte_ok = 1'b1;
             endcase
         end
     endfunction
@@ -165,8 +158,6 @@ module fat32_wav_player (
         end
     end
 
-    // Inferred simple dual-port synchronous RAM, one write and one read.
-    // Deliberately keep reset and presentation logic OUT of the RAM process.
     always_ff @(posedge clk) begin
         if (fifo_push) begin
             audio_ram[fifo_wr_ptr] <= data;
@@ -176,9 +167,6 @@ module fat32_wav_player (
         end
     end
 
-    // Keep the BRAM address pointers on synchronous reset. An asynchronous
-    // reset on registers driving RAMB address pins triggers REQP-1839 and can
-    // change the BRAM address outside the clocked timing model.
     always_ff @(posedge clk) begin
         if (!rst_n || restart) begin
             fifo_wr_ptr <= '0;
@@ -189,8 +177,6 @@ module fat32_wav_player (
         end
     end
 
-    // One-sample tick of latency is harmless: a read at tick N is used at N+1.
-    // This preserves continuous playback while enabling synchronous RAM reads.
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state                  <= ST_WAIT_SD;
@@ -235,8 +221,6 @@ module fat32_wav_player (
             fifo_count             <= '0;
             fifo_read_valid        <= 1'b0;
         end else if (restart) begin
-            // Start a fresh read for the selected track without resetting the SD
-            // controller. The user's PS/2/VGA player remains the system control.
             state                  <= sd_ready ? ST_REQ_MBR : ST_WAIT_SD;
             read_req               <= 1'b0;
             read_lba               <= 32'd0;
@@ -281,8 +265,6 @@ module fat32_wav_player (
         end else begin
             read_req <= 1'b0;
 
-            // Convert the WAV payload byte count to whole seconds over multiple
-            // clock cycles, avoiding a large combinational divider on the header path.
             if (duration_calc) begin
                 if (duration_work >= 32'd48000) begin
                     duration_work    <= duration_work - 32'd48000;
@@ -292,7 +274,6 @@ module fat32_wav_player (
                 end
             end
 
-            // Occupancy has one writer. Concurrent push+pop leaves it constant.
             case ({fifo_push, fifo_pop})
                 2'b10: fifo_count <= fifo_count + 1'b1;
                 2'b01: fifo_count <= fifo_count - 1'b1;
@@ -428,7 +409,6 @@ module fat32_wav_player (
                         end
                     end
 
-                    // Separate the two wide address calculations for timing closure.
                     ST_CALC_ROOT: begin
                         root_directory_lba <= data_region_lba +
                             ((root_cluster - 32'd2) << cluster_shift);
@@ -507,7 +487,6 @@ module fat32_wav_player (
                                 header_bad <= 1'b1;
                             end
 
-                            // Payload byte count in a canonical 44-byte WAV header.
                             case (file_byte_position)
                                 32'd40: payload_size[7:0]   <= data;
                                 32'd41: payload_size[15:8]  <= data;
@@ -539,8 +518,6 @@ module fat32_wav_player (
                         end
                     end
 
-                    // Finish on an audio tick, after the last prefetched sample
-                    // has spent a full sample period on the PWM output.
                     ST_DRAIN: if (sample_tick && fifo_count == 0 && !fifo_read_valid) begin
                         playing <= 1'b0;
                         sample  <= 8'h80;
@@ -557,4 +534,5 @@ module fat32_wav_player (
             end
         end
     end
+
 endmodule

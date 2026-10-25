@@ -1,5 +1,3 @@
-`timescale 1ns/1ps
-// 800x600 music-player UI. Artwork is stored in a synchronous RGB444 block ROM.
 module music_renderer (
     input  logic        clk,
     input  logic [10:0] x,
@@ -103,7 +101,6 @@ module music_renderer (
         end
     endfunction
 
-    // Character lookup for metadata, playlist labels, and the header.
     function automatic logic [7:0] text_char(
         input logic [1:0] selected_track,
         input logic [2:0] field,
@@ -112,7 +109,7 @@ module music_renderer (
         begin
             text_char = 8'h20;
             case (field)
-                3'd0: begin // Main title, first line
+                3'd0: begin
                     case (selected_track)
                         2'd0: case(index)
                             0:text_char="T"; 1:text_char="E"; 2:text_char="T";
@@ -133,7 +130,7 @@ module music_renderer (
                         endcase
                     endcase
                 end
-                3'd1: if (selected_track == 2'd1) begin // Long title, second line
+                3'd1: if (selected_track == 2'd1) begin
                     case(index)
                         0:text_char="I"; 1:text_char="Z"; 2:text_char="M";
                         3:text_char="E"; 4:text_char="R"; 5:text_char="E";
@@ -141,7 +138,7 @@ module music_renderer (
                         default: ;
                     endcase
                 end
-                3'd2: begin // Artist
+                3'd2: begin
                     case (selected_track)
                         2'd0: case(index)
                             0:text_char="K"; 1:text_char="O"; 2:text_char="R";
@@ -171,7 +168,7 @@ module music_renderer (
                         endcase
                     endcase
                 end
-                3'd3: begin // Short playlist title
+                3'd3: begin
                     case (selected_track)
                         2'd0: case(index)
                             0:text_char="T"; 1:text_char="E"; 2:text_char="T";
@@ -190,7 +187,7 @@ module music_renderer (
                         endcase
                     endcase
                 end
-                3'd4: begin // Playlist artist labels
+                3'd4: begin
                     case (selected_track)
                         2'd0: case(index)
                             0:text_char="K"; 1:text_char="O"; 2:text_char="R";
@@ -220,7 +217,7 @@ module music_renderer (
                         endcase
                     endcase
                 end
-                3'd5: begin // Header label MY MUSIC
+                3'd5: begin
                     case(index)
                         0:text_char="M"; 1:text_char="Y"; 2:text_char=" ";
                         3:text_char="M"; 4:text_char="U"; 5:text_char="S";
@@ -228,7 +225,7 @@ module music_renderer (
                         default: ;
                     endcase
                 end
-                3'd6: begin // SBER wordmark text
+                3'd6: begin
                     case(index)
                         0:text_char="S"; 1:text_char="B"; 2:text_char="E"; 3:text_char="R";
                         default: ;
@@ -280,7 +277,6 @@ module music_renderer (
         elapsed_min = 0; elapsed_sec = 0; duration_min = 0; duration_sec = 0;
         ti = 0; time_glyph = 8'h20;
 
-        // Dark charcoal canvas and a restrained header band.
         if (y < 10'd54) base_rgb = 12'h101;
         else if (x < 11'd344) base_rgb = 12'h111;
         else base_rgb = 12'h101;
@@ -288,13 +284,11 @@ module music_renderer (
 
         if (text_hit(x,y,32,18,track,3'd5,2'd1)) base_rgb = 12'hDDE;
 
-        // Detailed gradient icon and clean Cyrillic wordmark from the RGB444 ROM.
         if (x >= 11'd650 && x < 11'd778 && y >= 10'd3 && y < 10'd51) begin
             cover_mask = 1'b1;
             cover_addr = LOGO_BASE + (y-10'd3)*LOGO_W + (x-11'd650);
         end
 
-        // Left playlist panel, selected row highlight, track and artist names.
         if (x >= 11'd28 && x < 11'd334 && y >= 10'd82 && y < 10'd322) begin
             for (ti=0; ti<3; ti=ti+1) begin
                 row_y = 96 + ti*72;
@@ -314,7 +308,6 @@ module music_renderer (
             end
         end
 
-        // 192x192 album art is enlarged 2x to fill the 384x384 display window.
         if (x >= 11'd368 && x < 11'd752 && y >= 10'd80 && y < 10'd464) begin
             cover_mask = 1'b1;
             local_x = x - 368;
@@ -331,12 +324,10 @@ module music_renderer (
             !(x >= 11'd368 && x < 11'd752 && y >= 10'd80 && y < 10'd464))
             base_rgb = 12'h245;
 
-        // Selected track title and artist under the cover.
         if (text_hit(x,y,368,476,track,3'd0,2'd1)) base_rgb = 12'hFFF;
         if (text_hit(x,y,368,496,track,3'd1,2'd0)) base_rgb = 12'hDDE;
         if (text_hit(x,y,368,516,track,3'd2,2'd0)) base_rgb = 12'h9AB;
 
-        // Elapsed and total time, with a progress rail driven by consumed samples.
         progress_pos = (progress_pixels * 9) / 10;
         if (x >= 11'd86 && x < 11'd626 && y >= 10'd559 && y < 10'd563)
             base_rgb = 12'h344;
@@ -374,8 +365,6 @@ module music_renderer (
             if (glyph_hit(x,y,634+ti*10,551,2'd1,time_glyph)) base_rgb = 12'hEDE;
         end
 
-        // Eight live frequency bands. Each band is a colored pair; the dim
-        // pixels below the baseline give a small reflection like the reference.
         if (x >= 11'd694 && x < 11'd784 && y == 10'd574)
             base_rgb = 12'h223;
         for (ti=0; ti<8; ti=ti+1) begin
@@ -408,8 +397,6 @@ module music_renderer (
             end
         end
 
-        // During accelerometer sleep, replace the player UI with the supplied
-        // Sber logo centered on black. The source bitmap is enlarged 2x.
         if (sleep_mode) begin
             base_rgb = 12'h000;
             cover_mask = 1'b0;
@@ -421,7 +408,6 @@ module music_renderer (
         end
     end
 
-    // Synchronous ROM read and matching UI-color pipeline for VGA timing.
     always_ff @(posedge clk) begin
         cover_rgb_q  <= cover_rom[cover_addr];
         base_rgb_q   <= base_rgb;
@@ -431,4 +417,5 @@ module music_renderer (
     always_comb begin
         rgb = cover_mask_q ? cover_rgb_q : base_rgb_q;
     end
+
 endmodule

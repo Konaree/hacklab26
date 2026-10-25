@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: MIT
-// SPI mode 0 byte transfer. One synchronous 100 MHz clock domain.
-// Each half-period is either 250 clocks (200 kHz) or 4 clocks (12.5 MHz).
 module spi_byte_master (
     input  logic       clk,
     input  logic       rst_n,
@@ -23,7 +20,7 @@ module spi_byte_master (
     logic [2:0] bit_count;
     logic       high_half;
 
-    wire [7:0] period = slow_mode ? SLOW_DIV : FAST_DIV;
+    logic [7:0] period = slow_mode ? SLOW_DIV : FAST_DIV;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -79,4 +76,5 @@ module spi_byte_master (
             end
         end
     end
+    
 endmodule

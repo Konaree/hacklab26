@@ -1,5 +1,3 @@
-`timescale 1ns/1ps
-// Transfers the WAV player's time/progress buses from 100 MHz to the VGA clock.
 module music_timer (
     input  logic        clk,
     input  logic        rst,
@@ -23,16 +21,17 @@ module music_timer (
             elapsed_meta    <= 16'd0;
             duration_meta   <= 16'd0;
             progress_meta   <= 10'd0;
-            elapsed_sync  <= 16'd0;
-            duration_sync <= 16'd0;
-            progress_sync <= 10'd0;
+            elapsed_sync    <= 16'd0;
+            duration_sync   <= 16'd0;
+            progress_sync   <= 10'd0;
         end else begin
-            elapsed_meta     <= elapsed_in;
-            duration_meta    <= duration_in;
-            progress_meta    <= progress_in;
-            elapsed_sync  <= elapsed_meta;
-            duration_sync <= duration_meta;
-            progress_sync <= progress_meta;
+            elapsed_meta    <= elapsed_in;
+            duration_meta   <= duration_in;
+            progress_meta   <= progress_in;
+            elapsed_sync    <= elapsed_meta;
+            duration_sync   <= duration_meta;
+            progress_sync   <= progress_meta;
         end
     end
+
 endmodule

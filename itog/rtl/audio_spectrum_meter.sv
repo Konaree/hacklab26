@@ -1,7 +1,3 @@
-`timescale 1ns/1ps
-// Eight low-cost octave-style bands from differences of first-order low-pass filters.
-// Fixed-point Q8 filter states keep the low-frequency bands from accumulating DC bias.
-// Each displayed value is mean squared PCM magnitude over 1024 samples.
 module audio_spectrum_meter (
     input  logic        clk,
     input  logic        rst,
@@ -15,7 +11,7 @@ module audio_spectrum_meter (
     localparam integer WINDOW_BITS = 10;
 
     logic signed [15:0] sample_integer;
-    logic signed [15:0] sample_centered; // Q8 fixed-point PCM
+    logic signed [15:0] sample_centered;
     logic signed [15:0] lowpass [0:LP_COUNT-1];
     logic signed [15:0] lowpass_next [0:LP_COUNT-1];
     logic signed [16:0] band_delta [0:BAND_COUNT-1];
@@ -64,8 +60,6 @@ module audio_spectrum_meter (
         end
     end
 
-    // Shifts 1..7 give progressively lower cutoffs. Adjacent low-pass outputs
-    // form broad, overlapping octave-style bands from low frequency to high.
     generate
         for (genvar g = 0; g < LP_COUNT; g = g + 1) begin : g_filter
             always_comb begin
@@ -111,4 +105,5 @@ module audio_spectrum_meter (
             end
         end
     end
+
 endmodule

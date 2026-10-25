@@ -1,7 +1,3 @@
-// Nexys A7 on-board ADXL362. Self-initializing SPI driver.
-// Reads PARTID (0x02) and requires 0xF2, writes POWER_CTL=0x02
-// to enter measurement mode, then reads XDATA/YDATA/ZDATA (0x08..0x0A).
-// Data are signed 8-bit readings (the top 8 MSBs of 12-bit samples).
 module adxl362_reader #(
     parameter integer CLK_HZ = 100_000_000,
     parameter integer SAMPLE_HZ = 50
@@ -27,18 +23,26 @@ module adxl362_reader #(
                      PWR_START=4'd3, PWR_WAIT=4'd4,
                      SETTLE=4'd5, POLL=4'd6,
                      XYZ_START=4'd7, XYZ_WAIT=4'd8;
-    logic [3:0] state;
+
+    logic [3:0]         state;
     logic [TIMER_W-1:0] timer;
-    logic spi_start, spi_busy, spi_done;
-    logic [39:0] spi_tx, spi_rx;
-    logic [5:0] spi_nbits;
+    logic               spi_start, spi_busy, spi_done;
+    logic [39:0]        spi_tx, spi_rx;
+    logic [5:0]         spi_nbits;
 
     spi_mode0_master #(.CLK_HZ(CLK_HZ), .SPI_HZ(2_000_000)) u_spi (
-        .clk(clk), .rst(rst),
-        .start(spi_start), .tx_word(spi_tx), .transfer_bits(spi_nbits),
-        .rx_word(spi_rx), .busy(spi_busy), .done(spi_done),
-        .spi_sclk(ACL_SCLK), .spi_mosi(ACL_MOSI),
-        .spi_miso(ACL_MISO), .spi_csn(ACL_CSN)
+        .clk(clk),
+        .rst(rst),
+        .start(spi_start),
+        .tx_word(spi_tx),
+        .transfer_bits(spi_nbits),
+        .rx_word(spi_rx),
+        .busy(spi_busy),
+        .done(spi_done),
+        .spi_sclk(ACL_SCLK),
+        .spi_mosi(ACL_MOSI),
+        .spi_miso(ACL_MISO),
+        .spi_csn(ACL_CSN)
     );
 
     always_ff @(posedge clk or posedge rst) begin
@@ -63,7 +67,6 @@ module adxl362_reader #(
                     end else timer <= timer + 1'b1;
                 end
                 ID_START: if (!spi_busy) begin
-                    // 0x0B read, address 0x02 PARTID, dummy clock byte.
                     spi_tx <= {8'h0B, 8'h02, 8'h00, 16'h0000};
                     spi_nbits <= 6'd24;
                     spi_start <= 1'b1;
@@ -73,11 +76,10 @@ module adxl362_reader #(
                     if (spi_rx[7:0] == 8'hF2) state <= PWR_START;
                     else begin
                         timer <= '0;
-                        state <= BOOT; // Retry; never sleep if sensor absent.
+                        state <= BOOT;
                     end
                 end
                 PWR_START: if (!spi_busy) begin
-                    // Enable normal measurement: POWER_CTL (0x2D) = 0x02.
                     spi_tx <= {8'h0A, 8'h2D, 8'h02, 16'h0000};
                     spi_nbits <= 6'd24;
                     spi_start <= 1'b1;
@@ -101,7 +103,6 @@ module adxl362_reader #(
                     end else timer <= timer + 1'b1;
                 end
                 XYZ_START: if (!spi_busy) begin
-                    // Burst read, 0x08= XDATA, 0x09=YDATA, 0x0A=ZDATA.
                     spi_tx <= {8'h0B, 8'h08, 24'h000000};
                     spi_nbits <= 6'd40;
                     spi_start <= 1'b1;
@@ -119,4 +120,5 @@ module adxl362_reader #(
             endcase
         end
     end
+
 endmodule

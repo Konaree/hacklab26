@@ -1,5 +1,3 @@
-`timescale 1ns/1ps
-// Eight active-low Nexys A7 digits. Each group displays MM:SS.
 module music_sevenseg (
     input  logic        clk,
     input  logic        rst,
@@ -79,4 +77,5 @@ module music_sevenseg (
             default: segments=7'b1111111;
         endcase
     end
+
 endmodule

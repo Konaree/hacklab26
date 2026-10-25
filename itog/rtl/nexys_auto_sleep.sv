@@ -1,6 +1,6 @@
 module nexys_auto_sleep #(
     parameter integer CLK_HZ = 100_000_000,
-    parameter integer INACTIVE_SEC = 60,
+    parameter integer INACTIVE_SEC = 10,
     parameter integer MOTION_THRESHOLD = 6
 )(
     input  logic clk_100,
@@ -19,7 +19,7 @@ module nexys_auto_sleep #(
 );
     (* ASYNC_REG="TRUE" *) logic sw_meta, sw_sync;
     (* ASYNC_REG="TRUE" *) logic blank_meta, blank_sync;
-    
+
     logic sample_valid;
     logic signed [7:0] ax, ay, az;
     logic raw_sleep;
@@ -35,22 +35,31 @@ module nexys_auto_sleep #(
     end
 
     adxl362_reader #(.CLK_HZ(CLK_HZ)) accel (
-        .clk(clk_100), .rst(rst_100),
-        .ACL_MISO(ACL_MISO), .ACL_MOSI(ACL_MOSI),
-        .ACL_SCLK(ACL_SCLK), .ACL_CSN(ACL_CSN),
-        .sensor_ready(sensor_ready), .sample_valid(sample_valid),
+        .clk(clk_100),
+        .rst(rst_100),
+        .ACL_MISO(ACL_MISO),
+        .ACL_MOSI(ACL_MOSI),
+        .ACL_SCLK(ACL_SCLK),
+        .ACL_CSN(ACL_CSN),
+        .sensor_ready(sensor_ready),
+        .sample_valid(sample_valid),
         .ax(ax), .ay(ay), .az(az)
     );
 
     motion_detector #(.MOTION_THRESHOLD(MOTION_THRESHOLD)) motion (
-        .clk(clk_100), .rst(rst_100), .sample_valid(sample_valid),
-        .ax(ax), .ay(ay), .az(az), .motion_pulse(motion_pulse)
+        .clk(clk_100),
+        .rst(rst_100),
+        .sample_valid(sample_valid),
+        .ax(ax), .ay(ay), .az(az),
+        .motion_pulse(motion_pulse)
     );
 
     auto_sleep_timer #(.CLK_HZ(CLK_HZ), .INACTIVE_SEC(INACTIVE_SEC)) idle (
-        .clk(clk_100), .rst(rst_100),
+        .clk(clk_100),
+        .rst(rst_100),
         .enabled(sw_sync && sensor_ready),
-        .key_activity(key_activity), .motion_pulse(motion_pulse),
+        .key_activity(key_activity),
+        .motion_pulse(motion_pulse),
         .sleep_req(raw_sleep)
     );
     assign sleep_100 = raw_sleep && sw_sync && SW0 && sensor_ready;
@@ -64,5 +73,7 @@ module nexys_auto_sleep #(
             blank_sync <= blank_meta;
         end
     end
+
     assign blank_40 = blank_sync;
+
 endmodule

@@ -1,6 +1,3 @@
-`timescale 1ns/1ps
-// PS/2-controlled VGA WAV player with optional accelerometer auto-sleep.
-// WAV audio and SD control run at 100 MHz; display runs from vga_clk40.
 module player_top (
     input  logic       CLK100MHZ,
     input  logic       CPU_RESETN,
@@ -33,6 +30,7 @@ module player_top (
     localparam logic [31:0] SAMPLE_STEP = 32'd2_061_584; // 48 kHz at 100 MHz
 
     (* ASYNC_REG = "TRUE" *) logic [1:0] reset_pipe;
+    \
     wire rst_n = reset_pipe[1];
     wire rst_100 = ~rst_n;
     logic clk_40mhz;
@@ -40,66 +38,87 @@ module player_top (
     wire rst_40 = rst_100 | ~clk_40_locked;
 
     always_ff @(posedge CLK100MHZ or negedge CPU_RESETN) begin
-        if (!CPU_RESETN) reset_pipe <= 2'b00;
-        else reset_pipe <= {reset_pipe[0], 1'b1};
+        if (!CPU_RESETN)
+            reset_pipe <= 2'b00;
+        else
+            reset_pipe <= {reset_pipe[0], 1'b1};
     end
 
     vga_clk40 u_vga_clk40 (
-        .clk_in1(CLK100MHZ), .reset(rst_100),
-        .clk_out1(clk_40mhz), .locked(clk_40_locked)
+        .clk_in1(CLK100MHZ),
+        .reset(rst_100),
+        .clk_out1(clk_40mhz),
+        .locked(clk_40_locked)
     );
 
     logic [7:0] scan_code;
-    logic scan_valid;
+    logic       scan_valid;
     logic [1:0] song_id;
     logic [1:0] player_state;
-    logic restart_pulse;
-    logic sensor_ready, sleep_100, blank_40, motion_pulse;
+    logic       restart_pulse;
+    logic       sensor_ready, sleep_100, blank_40, motion_pulse;
 
     ps2_receiver ps2 (
-        .clk(CLK100MHZ), .rst(rst_100),
-        .ps2_clk(PS2_CLK), .ps2_data(PS2_DATA),
-        .scan_code(scan_code), .scan_valid(scan_valid)
+        .clk(CLK100MHZ),
+        .rst(rst_100),
+        .ps2_clk(PS2_CLK),
+        .ps2_data(PS2_DATA),
+        .scan_code(scan_code),
+        .scan_valid(scan_valid)
     );
 
     player_controller ctrl (
-        .clk(CLK100MHZ), .rst(rst_100),
-        .scan_code(scan_code), .scan_valid(scan_valid),
-        .song_id(song_id), .player_state(player_state),
+        .clk(CLK100MHZ),
+        .rst(rst_100),
+        .scan_code(scan_code),
+        .scan_valid(scan_valid),
+        .song_id(song_id),
+        .player_state(player_state),
         .restart_pulse(restart_pulse)
     );
 
-    logic sd_ready, sd_busy, sd_done, sd_error;
-    logic sd_read_req;
-    logic [31:0] sd_read_lba;
-    logic [7:0] sd_data;
-    logic sd_data_valid;
-    logic [8:0] sd_data_index;
-    logic [7:0] sd_error_code;
+    logic           sd_ready, sd_busy, sd_done, sd_error;
+    logic           sd_read_req;
+    logic [31:0]    sd_read_lba;
+    logic [7:0]     sd_data;
+    logic           sd_data_valid;
+    logic [8:0]     sd_data_index;
+    logic [7:0]     sd_error_code;
 
     sd_spi_sector sd_controller (
-        .clk(CLK100MHZ), .rst_n(rst_n), .miso(SD_DAT0),
-        .sck(SD_SCK), .mosi(SD_CMD), .cs_n(SD_DAT3),
-        .sd_reset_n(SD_RESET), .read_req(sd_read_req), .read_lba(sd_read_lba),
-        .initialized(sd_ready), .busy(sd_busy), .sector_done(sd_done),
-        .error(sd_error), .data(sd_data), .data_valid(sd_data_valid),
-        .data_index(sd_data_index), .error_code(sd_error_code)
+        .clk(CLK100MHZ),
+        .rst_n(rst_n),
+        .miso(SD_DAT0),
+        .sck(SD_SCK),
+        .mosi(SD_CMD),
+        .cs_n(SD_DAT3),
+        .sd_reset_n(SD_RESET),
+        .read_req(sd_read_req),
+        .read_lba(sd_read_lba),
+        .initialized(sd_ready),
+        .busy(sd_busy),
+        .sector_done(sd_done),
+        .error(sd_error),
+        .data(sd_data),
+        .data_valid(sd_data_valid),
+        .data_index(sd_data_index),
+        .error_code(sd_error_code)
     );
 
-    logic [31:0] sample_phase;
-    logic sample_tick;
-    logic [7:0] pcm_sample;
-    logic wav_playing;
-    logic [15:0] wav_elapsed_seconds, wav_duration_seconds;
-    logic [9:0] wav_progress_pixels;
-    logic [7:0] wav_status;
-    logic [15:0] audio_leds;
-    logic [7:0] audio_level;
-    logic audio_level_valid;
-    logic [31:0] spectrum_levels;
-    logic amp_active;
-    logic [7:0] pwm_count;
-    logic [7:0] pwm_sample;
+    logic [31:0]    sample_phase;
+    logic           sample_tick;
+    logic [7:0]     pcm_sample;
+    logic           wav_playing;
+    logic [15:0]    wav_elapsed_seconds, wav_duration_seconds;
+    logic [9:0]     wav_progress_pixels;
+    logic [7:0]     wav_status;
+    logic [15:0]    audio_leds;
+    logic [7:0]     audio_level;
+    logic           audio_level_valid;
+    logic [31:0]    spectrum_levels;
+    logic           amp_active;
+    logic [7:0]     pwm_count;
+    logic [7:0]     pwm_sample;
 
     always_ff @(posedge CLK100MHZ) begin
         if (!rst_n) begin
@@ -114,43 +133,71 @@ module player_top (
     end
 
     fat32_wav_player wav_player (
-        .clk(CLK100MHZ), .rst_n(rst_n),
-        .sd_ready(sd_ready), .sd_busy(sd_busy), .sd_done(sd_done),
-        .sd_error(sd_error), .track_index(song_id),
+        .clk(CLK100MHZ),
+        .rst_n(rst_n),
+        .sd_ready(sd_ready),
+        .sd_busy(sd_busy),
+        .sd_done(sd_done),
+        .sd_error(sd_error),
+        .track_index(song_id),
         .play_enable((player_state == PLAYING) && !sleep_100),
-        .restart(restart_pulse), .read_req(sd_read_req), .read_lba(sd_read_lba),
-        .data(sd_data), .data_valid(sd_data_valid), .data_index(sd_data_index),
-        .sample_tick(sample_tick), .sample(pcm_sample), .playing(wav_playing),
+        .restart(restart_pulse),
+        .read_req(sd_read_req),
+        .read_lba(sd_read_lba),
+        .data(sd_data),
+        .data_valid(sd_data_valid),
+        .data_index(sd_data_index),
+        .sample_tick(sample_tick),
+        .sample(pcm_sample),
+        .playing(wav_playing),
         .elapsed_seconds(wav_elapsed_seconds),
         .duration_seconds(wav_duration_seconds),
-        .progress_pixels(wav_progress_pixels), .status(wav_status)
+        .progress_pixels(wav_progress_pixels),
+        .status(wav_status)
     );
 
     assign amp_active = (player_state == PLAYING) && wav_playing && !sleep_100;
     assign pwm_sample = amp_active ? pcm_sample : 8'h80;
-    wire pwm_bit = (pwm_count < pwm_sample);
-    // Nexys A7 audio amplifier input is open-drain.
+
+    logic pwm_bit = (pwm_count < pwm_sample);
+
     assign AUD_PWM = pwm_bit ? 1'bz : 1'b0;
     assign AUD_SD = amp_active;
 
     audio_level_meter level_meter (
-        .clk(CLK100MHZ), .rst(rst_100), .sample_tick(sample_tick),
-        .active(amp_active), .sample(pcm_sample),
-        .led(audio_leds), .level(audio_level), .level_valid(audio_level_valid)
+        .clk(CLK100MHZ),
+        .rst(rst_100),
+        .sample_tick(sample_tick),
+        .active(amp_active),
+        .sample(pcm_sample),
+        .led(audio_leds),
+        .level(audio_level),
+        .level_valid(audio_level_valid)
     );
+
     assign LED = audio_leds;
 
     music_rgb rgb_visualizer (
-        .clk(CLK100MHZ), .rst(rst_100),
-        .active(amp_active), .level(audio_level),
+        .clk(CLK100MHZ),
+        .rst(rst_100),
+        .active(amp_active),
+        .level(audio_level),
         .level_valid(audio_level_valid),
-        .LED16_R(LED16_R), .LED16_G(LED16_G), .LED16_B(LED16_B),
-        .LED17_R(LED17_R), .LED17_G(LED17_G), .LED17_B(LED17_B)
+        .LED16_R(LED16_R),
+        .LED16_G(LED16_G),
+        .LED16_B(LED16_B),
+        .LED17_R(LED17_R),
+        .LED17_G(LED17_G),
+        .LED17_B(LED17_B)
     );
 
     audio_spectrum_meter spectrum_meter (
-        .clk(CLK100MHZ), .rst(rst_100), .sample_tick(sample_tick),
-        .active(amp_active), .sample(pcm_sample), .band_levels(spectrum_levels)
+        .clk(CLK100MHZ),
+        .rst(rst_100),
+        .sample_tick(sample_tick),
+        .active(amp_active),
+        .sample(pcm_sample),
+        .band_levels(spectrum_levels)
     );
 
     nexys_auto_sleep #(.CLK_HZ(100_000_000), .INACTIVE_SEC(60)) auto_sleep (
@@ -161,18 +208,18 @@ module player_top (
         .sensor_ready(sensor_ready), .motion_pulse(motion_pulse)
     );
 
-    // Transfer slowly changing player data into the VGA/timer clock domain.
     (* ASYNC_REG = "TRUE" *) logic [1:0] song_meta, song_sync;
     (* ASYNC_REG = "TRUE" *) logic [31:0] spectrum_meta, spectrum_sync;
-    logic [15:0] elapsed_seconds, duration_seconds;
-    logic [9:0] progress_pixels;
-    logic [10:0] x;
-    logic [9:0] y;
-    logic visible, hsync, vsync;
-    logic visible_d, hsync_d, vsync_d;
-    logic [11:0] rgb_next;
-    logic [6:0] segments;
-    logic dp_n;
+
+    logic [15:0]    elapsed_seconds, duration_seconds;
+    logic [9:0]     progress_pixels;
+    logic [10:0]    x;
+    logic [9:0]     y;
+    logic           visible, hsync, vsync;
+    logic           visible_d, hsync_d, vsync_d;
+    logic [11:0]    rgb_next;
+    logic [6:0]     segments;
+    logic           dp_n;
 
     always_ff @(posedge clk_40mhz or posedge rst_40) begin
         if (rst_40) begin
@@ -189,8 +236,13 @@ module player_top (
     end
 
     vga_adapter_timing timing (
-        .clk(clk_40mhz), .rst(rst_40),
-        .x(x), .y(y), .visible(visible), .hsync(hsync), .vsync(vsync)
+        .clk(clk_40mhz),
+        .rst(rst_40),
+        .x(x),
+        .y(y),
+        .visible(visible),
+        .hsync(hsync),
+        .vsync(vsync)
     );
 
     music_timer timer_sync (
@@ -212,6 +264,7 @@ module player_top (
         .elapsed_seconds(elapsed_seconds), .duration_seconds(duration_seconds),
         .segments(segments), .dp(dp_n), .anodes(AN)
     );
+
     assign {CA, CB, CC, CD, CE, CF, CG} = segments;
     assign DP = dp_n;
 
@@ -238,4 +291,5 @@ module player_top (
             VGA_VS <= vsync_d;
         end
     end
+
 endmodule

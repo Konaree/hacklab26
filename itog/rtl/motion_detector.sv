@@ -1,5 +1,3 @@
-// One-clock pulse when new XYZ measurement differs significantly
-// from previous reading. Sum of absolute signed differences.
 module motion_detector #(
     parameter integer MOTION_THRESHOLD = 6
 )(
@@ -48,4 +46,5 @@ module motion_detector #(
             end
         end
     end
+
 endmodule
