@@ -88,7 +88,7 @@ module player_controller (
                                         player_state <= PLAYING;
                                 end
                             end
-                            8'h1B: begin 
+                            8'h1B: begin
                                 if (break_prefix) key_held[6] <= 1'b0;
                                 else if (!key_held[6]) begin
                                     key_held[6]     <= 1'b1;
@@ -105,5 +105,5 @@ module player_controller (
             end
         end
     end
-    
+
 endmodule

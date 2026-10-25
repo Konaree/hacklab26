@@ -13,7 +13,7 @@ module ps2_receiver (
     logic           parity_bit;
     logic [17:0]    timeout_count;
 
-    logic falling_edge = clk_sync[2:1] == 2'b10;
+    wire falling_edge = (clk_sync[2:1] == 2'b10);
 
     always_ff @(posedge clk or posedge rst) begin
         if (rst) begin
